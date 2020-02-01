@@ -1,0 +1,46 @@
+---
+output: html_document
+---
+
+#### **To: Quan Xu**  
+  
+#### **From: Akira Nakagawa, Anh Doan**  
+  
+#### **Date: 11/02/2019**   
+  
+#### **RE: Cereal Industry Analysis - effectiveness of promotion and advertisement**  
+
+***
+We have applied data analysis on the cereal industry dataset, 
+and we found that:
+<div>
+- General Mills (GM) is at number two in the industory, behind Kelloggs. Moreover, we are losing the market share in the most popular flavor products, Toasted and Regular flavor.
+- Post is behind GM. However, we found from the data that Post is able to invest more on a few because Post slects a few flavor types of cereals to sell. Post may get our market share very soon.
+</div>
+GM has to become more competative in order to maintain and widen our market share in the cereal industry. 
+Through our analysis, we found that promotion and advertisement have a positive influence on our sales.
+<hr>
+<h4>Finding 1: Promotion</h4>
+![](promo.png){width=500px}
+<div>
+Promotion has two levels: with promotion or without promotion.Upon our data analysis, we see the relationship between unit sales and promotion. Average weekly unit sales without promotion was 7.89 units, whereas 11.20 units has been sold on a average when the product has promotion.<br>
+<b> Average weekly unit sales in each store  with promotion is 42% more than unit sales without promotion.</b>We highly recommend to have more promotion for our products!
+</div>
+<hr>
+<h4>Finding 2: Advertisement</h4>
+![](ad.png){width=500px}
+<div>
+Advertisement has three levels: mediam advertisement, small advertisement, and no advertisement. Kelloggs has more advertisements than GM or Post. Overall, advertisement will make your customer buy more. And surprisingly, weekly average unit sale with small advertisement was higher than the ones with mediam advertisement. Average sales per week was 10.72 for mediam advertisement, 11.27 for small advertisement, and 8.27 for no advertisement.
+<b> Average weekly unit sales in each store  with small advertisement is 36% more than unit sales without advertisement </b>.
+</div>
+<hr>
+<h4>Conclusion and Suggestion</h4>
+<div>
+GM should do more advertisement and promotion in order to win over its competition in the cereal industry. If the budget is limited, we still recommend to have more at least promotions since it is the most effective to sell more units. 
+Other recommendations/considerations are cereal's volume, taste(Toasted flavor), because they impact on unit sale.
+</div>
+
+
+
+
+Please do not hesitate to contact us if you have questions or would like to discuss the analysis further, it is best to reach us at anakagawa@seattleu.edu and doanahn@seattleu.edu. We can also provide the Technical Appendix with our complete analysis and the data if you would like more detail.

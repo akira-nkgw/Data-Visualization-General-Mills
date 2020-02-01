@@ -1,0 +1,932 @@
+---
+title: "Midterm Project: General Mills"
+author: "Akira Nakagawa, Anh Doan"
+date: ""   
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+---
+
+```{r}
+#Course: BUAN 5210
+#Purpose: Analyze effectiveness of Advertisement and Promotion, and comparison with competitors
+#Date: 11/02/2019
+#Author: Akira Nakagawa, Anh Doan
+```
+
+Preparing libraries and data for analysis
+```{r message = FALSE}
+# -- Clear environment of variables and functions------------------
+rm(list = ls(all = TRUE)) 
+
+# Clear environmet of packages
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), detach, character.only = TRUE, unload = TRUE)
+
+# -- Load packages ---------------------------------------
+#install.packages("tidyverse") 
+library(tidyverse)
+# The gridExtra package contains grid.arrange function used to combine plots in the same window
+library(gridExtra)
+# The janitor package contains tidyverse functions for cross-tables
+library(janitor)
+# The knitr package contains some table formating functions
+library(knitr)
+# The GGally package contains a custom correlation plot we will use
+library(GGally)
+library(MultinomialCI)
+library(htmlTable)
+library(Hmisc)
+library(formattable)
+library(rms)
+library(MultNonParam)
+
+
+# -- Load data from mtp_data.csv -----------------------------------
+mtp <- read.csv("mtp_data.csv")
+
+# -- data cleansing  -----------------------------------
+# Convert into factor variables
+mtp$promo <- factor(mtp$promo)
+mtp$iri_key <- factor(mtp$iri_key)
+
+# Create a column for Company based on the column "brand"
+Kell <- c("KELLOGGS COCOA KRISPIES", "KELLOGGS FROOT LOOPS", "KELLOGGS FROSTED MINI WHEATS", "KELLOGGS RAISIN BRAN", "KELLOGGS RICE KRISPIES", "KELLOGGS SMART START", "KELLOGGS SPECIAL K")
+GM <- c("GENERAL MILLS CHEERIOS", "GENERAL MILLS CINNAMON TST CR", "GENERAL MILLS COCOA PUFFS", "GENERAL MILLS KIX", "GENERAL MILLS LUCKY CHARMS")
+Po <- c("POST GRAPE NUTS", "POST SHREDDED WHEAT")
+mtp <- transform(mtp, company= if_else( mtp$brand %in% Kell, "Kelloggs", if_else(mtp$brand %in% GM, "GM", "Post")))
+
+```
+<h2>Base EDA Step 1: Uni-variate non-graphical EDA</h2>
+```{r message = FALSE, warning = FALSE}
+# to look at the data 
+head(mtp)
+```
+<h4>Comments</h4>
+<div>
+- In the price (per package), we can see only "0.5" in the first 6 rows. Need to investigate in further EDA steps.
+- UPC is told to be a unique variable but it has duplications. 
+</div>
+
+```{r message = FALSE, warning = FALSE}
+# to see how many observations, variables, types etc
+str(mtp)
+```
+<h4>Comments</h4> 
+<div>
+- 5 Factor variables + promo(int)
+    - Promo has to be factor based on the variable descriptions. We may need to be careful with this variable
+    - UPC has 114 levels, which may be hard to show in visualization
+    - Package only has 2 possible states: Box or Cup
+- 4 continuous integer variables
+- Assume iri-key and UPC are like a composite primary key
+</div>
+
+```{r message = FALSE, warning = FALSE}
+summary(mtp)
+```
+<h4>Comments</h4> 
+<div>
+- Volume is symmetric. However, the max is 4.000, so we assume there are some outliers
+- Price is symmetric. However, the min is 0.250 so we may have some outliars 
+- week is told to be a time series
+- Brand has information about producer and brands together, so it would be difficult to see the relation between the producers
+- Because promo's 1st Qu, median, and 3rd Qu. are all 0. Thus, at least more than 75% of them do not have promotions
+- Kelloggs sells the most out of three companies (What is the Kelloggs's strategy?)
+</div>
+<h4>Questions</h4>
+<div>
+- Is there significant difference of sales between promo and non-promo cereals?
+- Is certain brand cheaper than the other?
+- Is company/brand name an important factor for more sales?
+- Is there significant difference between none-ad and with advertisement
+</div>
+
+<h2>Uni-variate graphical</h2>
+<h3>Categorical</h3>
+
+```{r message = FALSE, warning = FALSE}
+grid.arrange(
+# company
+ggplot(data = mtp, mapping = aes(x = company)) +
+  geom_bar(),
+# brand
+ggplot(data = mtp, mapping = aes(x = brand)) +
+  geom_bar(),
+# flavor
+ggplot(data = mtp, mapping = aes(x = flavor)) +
+  geom_bar(),
+# package
+ggplot(data = mtp, mapping = aes(x = package)) +
+  geom_bar(),
+# promo
+ggplot(data = mtp, mapping = aes(x = promo)) +
+  geom_bar(),
+# ad
+ggplot(data = mtp, mapping = aes(x = ad)) +
+  geom_bar(),
+ncol = 1 )
+```
+<h4>Comments</h4> 
+<div>
+- Most are Regular and Toasted (flavor)
+- Most cereal package have no advertisement
+- Company, Post, can be seen completing 2nd place in the market after GM
+</div>
+
+<h3>Quantative</h3>
+
+<h4>Units</h4>
+```{r message = FALSE, warning = FALSE}
+grid.arrange(
+# Create histogram
+ggplot(data = mtp, mapping = aes(x = units)) + 
+    geom_histogram(),
+
+# Add boxplot
+ggplot(data = mtp, mapping = aes(x = 1)) + 
+    geom_boxplot(mapping = aes(y = units)) +
+    coord_flip(), # use to have same x-axis on both graphs
+
+# Set number of columns in grid.arrange
+ncol = 1 )
+```
+<h4>Comments</h4> 
+<div>
+- Skewed
+- Many rows have smaller units/sales
+</div>
+
+<h4>Volume</h4>
+```{r message = FALSE, warning = FALSE}
+grid.arrange(
+# Create histogram
+ggplot(data = mtp, mapping = aes(x = volume)) + 
+    geom_histogram(),
+
+# Add boxplot
+ggplot(data = mtp, mapping = aes(x = 1)) + 
+    geom_boxplot(mapping = aes(y = volume)) +
+    coord_flip(), # use to have same x-axis on both graphs
+
+# Set number of columns in grid.arrange
+ncol = 1 )
+```
+<h4>Comments</h4> 
+<div>
+- Skewed
+</div>
+
+<h4>Price</h4>
+```{r message = FALSE, warning = FALSE}
+grid.arrange(
+# Create histogram
+ggplot(data = mtp, mapping = aes(x = price)) + 
+    geom_histogram(),
+
+# Add boxplot
+ggplot(data = mtp, mapping = aes(x = 1)) + 
+    geom_boxplot(mapping = aes(y = price)) +
+    coord_flip(), # use to have same x-axis on both graphs
+
+# Set number of columns in grid.arrange
+ncol = 1 )
+```
+<h4>Comments</h4> 
+<div>
+- Symmetric
+</div>
+
+<h4>Questions</h4> 
+<div>
+- Why units's distribution is like this above.
+</div>
+
+<h2>Multi-variate non-graphical</h2>
+<h3>Categorical</h3>
+Company and Flavor
+```{r message = FALSE, warning = FALSE}
+# Company and Flavor
+mtp %>% 
+  tabyl(flavor, company) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) # Total margins
+```
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+  tabyl(flavor, company) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) # round decimals
+
+```
+<h4>Comments</h4> 
+<div>
+- Post sells only "Regular" flavor but they remarkably got 22% share in the cereal market.
+- Only GM sells "Cinnamon flavor", and they got number one share in "cocoa flavor", but "cocoa" only has 9% of whole cereals...
+- Other than "cinnamon and cocoa", GM is behind Kelloggs and Post
+</div>
+<br>
+
+Package and brand(comapny)
+```{r message = FALSE, warning = FALSE}
+# package and brand
+mtp %>% 
+  tabyl(brand, package) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) # Total margins
+```
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+  tabyl(brand, package) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) # round decimals
+```
+Package and company
+```{r message = FALSE, warning = FALSE}
+# package and company
+mtp %>% 
+  tabyl(company, package) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) # Total margins
+```
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+  tabyl(company, package) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) # round decimals
+```
+<h4>Comments</h4> 
+<div>
+- Each company only sells 1% of cereal in a "CUP"
+- Post has more "CUPs" relative to its sales size, Kelloggs has least CUPs in comparison with its "BOX"
+</div>
+<br>
+
+Company and Ad
+```{r message = FALSE, warning = FALSE}
+# ad and company
+mtp %>% 
+  tabyl(company, ad) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) # Total margins
+```
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+  tabyl(company, ad) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) # round decimals
+```
+<h4>Comments</h4> 
+<div>
+- Kellogs put items on advertisement the most as whole and as proportion
+  - Ratio for GM:       2:1:30 (9% has been advertised)
+  - Ratio for Kelloggs: 3:2:39 (11% has been advertised)
+  - Ratio for Post:     1:1:20 (9% has been advertised)
+</div>
+<br>
+
+Company and Promo
+```{r message = FALSE, warning = FALSE}
+# promo and company
+mtp %>% 
+  tabyl(company, promo) %>% # creates table of counts
+  adorn_totals(where = c("row", "col")) # Total margins
+```
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+  tabyl(company, promo) %>% 
+  adorn_totals(where = c("row", "col")) %>% 
+  adorn_percentages(denominator = "all") %>% # creates proportions
+  adorn_rounding(2) # round decimals
+```
+<h4>Comments</h4> 
+<div>
+- Kellogs put items on promo the most as a whole, Kellogs and Post work on promotion on the same propotion and greater than GM.
+  - Ratio for GM:       27:6 (aprox.18% has been promoted)
+  - Ratio for Kelloggs: 7:2 (aprox.22% has been advertised)
+  - Ratio for Post:     17:5 (aprox.22% has been advertised)
+</div>
+<br>
+
+<h3>Quantitative</h3>
+```{r message = FALSE, warning = FALSE}
+# Correlation table
+mtp %>% 
+  select_if(is.numeric) %>% # Use to select just the numeric variables
+  cor() %>% 
+  round(2) %>% 
+  kable()
+```
+<h4>Comments</h4> 
+<div>
+- Price and volume has correlation
+</div>
+<h4>Question</h4> 
+<div>
+- Somehow units and price does not have correlation. Need to figure it out.
+</div>
+<br>
+
+<h2>Multi-variate graphical</h4>
+<h3>Categorical</h3>
+```{r message = FALSE, warning = FALSE}
+# More detail on promo,ad and company
+grid.arrange(
+  # ad and company
+  mtp %>% 
+    ggplot(mapping = aes(x = ad, fill = company)) + 
+      geom_bar(position = "dodge"),
+  # promo and company
+  mtp %>% 
+    ggplot(mapping = aes(x = promo , fill = company)) + 
+      geom_bar(position = "dodge"),
+  # flavor and company
+  mtp %>% 
+    ggplot(mapping = aes(x = flavor , fill = company)) + 
+      geom_bar(position = "dodge"),
+  # package and company
+  mtp %>% 
+    ggplot(mapping = aes(x = package , fill = company)) +
+      geom_bar(position = "dodge"),
+ncol = 1
+)
+```
+```{r message = FALSE, warning = FALSE}
+# More detail on company and ad
+grid.arrange(
+  mtp %>% 
+    ggplot(mapping = aes(x = company, fill = ad)) + 
+      geom_bar(position = "dodge") +
+      coord_flip(),
+  mtp %>% 
+    ggplot(mapping = aes(x = company, fill = ad)) +
+      geom_bar(position = "fill") +
+      coord_flip(),
+ncol = 1
+)
+```
+
+```{r message = FALSE, warning = FALSE}
+# More detail on brand and promo
+grid.arrange(
+    # Cluster of counts
+  mtp %>% 
+    ggplot(mapping = aes(x = company, fill = promo)) + 
+      geom_bar(position = "dodge") +
+      coord_flip(),
+  # Proportion of counts
+  mtp %>% 
+    ggplot(mapping = aes(x = company, fill = promo)) +
+      geom_bar(position = "fill") +
+      coord_flip(),
+
+ncol = 1
+)
+```
+<h4>Comments</h4> 
+<div>
+- Confirm that GM has less advertisement and promo comparing with competitors
+- Kellogs has more advertisement and promotion than the other
+</div>
+
+```{r message = FALSE, warning = FALSE}
+mtp %>%
+  group_by(ad, company) %>% 
+  summarise(count = n()) %>% 
+  ggplot(aes(ad, company)) + 
+  geom_tile(aes(fill = count))
+```
+<h4>Comments</h4> 
+<div>
+- Kelloggs has slightly ligher color in A and B for ad. However, three company has almost the same pattern in advertisement.
+</div>
+
+<h3>Quantitative</h3>
+```{r message = FALSE, warning = FALSE}
+# price and units
+mtp %>% 
+  ggplot(mapping = aes(x = units, y = price)) +
+  geom_point()
+
+```
+<h4>Comments</h4> 
+<div>
+- Price and units do not seem to have any relations.
+</div>
+
+```{r message = FALSE, warning = FALSE}
+# volume and price
+mtp %>% 
+  ggplot(mapping = aes(x = volume, y = price)) +
+  geom_point()
+```
+<h4>Comments</h4> 
+<div>
+- Price and volume seem to have relations/patterns.
+</div>
+<h4>Question</h4> 
+<div>
+- What does seperate between volume less than 0.5 and above? Advertisement or Promo?
+</div>
+
+```{r message = FALSE, warning = FALSE}
+# volume and units
+mtp %>% 
+  ggplot(mapping = aes(x = volume, y = units)) +
+  geom_point()
+```
+<h4>Comments</h4> 
+<div>
+- volume and units do not seem to have any relations.
+</div>
+
+
+<h3>Categorical and quantitative </h3>
+```{r warning = FALSE, message = FALSE}
+
+mtp %>%
+  select(week, units, brand, flavor, package, volume, price, promo, ad, company) %>%
+  ggpairs()
+```
+<h4>Comments</h4> 
+<div>
+- Look more closely at:
+  - price and volume
+  - price and flavor
+  - volume and company
+</div>
+<br>
+```{r message = FALSE, warning = FALSE}
+# volume, price and company
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = price, color = company)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE)
+# volume, price and brand
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = price, color = brand)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE)
+  
+# volume, price and flavor
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = price, color = flavor)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE)
+
+# volume, price and ad
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = price, color = ad)) +
+      geom_point() +
+      geom_smooth(method = "lm", se = FALSE)
+```
+<h4>Comments</h4> 
+<div>
+- Advertised has lower price on its similar volume
+- GM's creal volume has more explanation to price than the other two companies'.
+- Kelloggs have smaller range in terms of volume
+</div>
+```{r message = FALSE, warning = FALSE}
+grid.arrange(
+  # volume and flavor
+  mtp %>% 
+    ggplot(mapping = aes(x = flavor, y = volume)) +
+      geom_boxplot(),
+  # price nad flavor
+  mtp %>% 
+    ggplot(mapping = aes(x = flavor, y = price)) +
+      geom_boxplot(),
+    # price nad flavor
+  mtp %>% 
+    ggplot(mapping = aes(x = company, y = price)) +
+      geom_boxplot(),
+      # price nad flavor
+  mtp %>% 
+    ggplot(mapping = aes(x = company, y = units)) +
+      geom_boxplot(),
+
+ncol = 2
+)
+```
+<h4>Comments</h4> 
+<div>
+- Advertised has lower price at sale on its similar volume
+</div>
+<h4>Questions</h4>
+<div>
+- We need to see the relation between Units and ad/promo of company
+</div>
+<br>
+Units and company/ad
+```{r message = FALSE, warning = FALSE}
+mtp %>%
+  group_by(ad, company) %>% 
+  summarise(med_units = median(units)) %>% 
+  ggplot(aes(ad, company)) +
+  geom_tile(aes(fill = med_units))
+```
+<h4>Comments</h4> 
+<div>
+- GM's cereal with mediam advertisement has more sales/units than other
+- However, because Kelloggs sells more, so we assume that Kelloggs has more power on its brand or there are more stores selling Kelloggs
+</div>
+<br>
+Units and company/promo
+```{r message = FALSE, warning = FALSE}
+mtp %>%
+  group_by(promo, company) %>% 
+  summarise(med_units = median(units)) %>% 
+  ggplot(aes(promo, company)) +
+  geom_tile(aes(fill = med_units))
+```
+<h4>Comments</h4> 
+<div>
+- GM's cereal with promotion has the best sales/units than other
+</div>
+<br>
+
+<h4>Questions</h4> 
+<div>
+- We need to see why GM has fewer units sold in total. 
+</div>
+<br>
+
+<h2>Detailed EDA</h2>
+
+Do units differ by promo, ads, or company(producer)
+```{r message = FALSE, warning = FALSE}
+# promo and units
+mtp %>% 
+  ggplot(mapping = aes(x = units)) +
+  geom_histogram() +
+  facet_wrap( ~ promo)
+```
+<div>
+- Propotionally cereal with promotion are sold more units, especially for higher units
+- Units without promotion have steep down but the units with promotion have less steepness
+- Promotion may have influenced the number of units sold
+</div>
+```{r message = FALSE, warning = FALSE}
+# ad and units
+mtp %>% 
+  ggplot(mapping = aes(x = units)) +
+  geom_histogram() +
+  facet_wrap( ~ ad)
+```
+<div>
+- Pattern holds?
+- Units without promotion have steep down but the units with promotion have less steepness
+</div>
+
+```{r message = FALSE, warning = FALSE}
+# company and units
+mtp %>% 
+  ggplot(mapping = aes(x = units)) +
+  geom_histogram() +
+  facet_wrap( ~ company)
+```
+<h4>Comments</h4> 
+<div>
+- GM's cereal with promotion has the best sales/units than other
+- Pattern holds
+</div>
+<br>
+
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = units)) +
+    geom_point() +
+    geom_hline(yintercept = median(mtp$units), color="blue") +
+    annotate(geom = "text", label = "units mean", x=3, y = 6, color="blue") +
+    geom_smooth(mapping = aes(color = promo), method = "lm", se = FALSE)
+```
+<h4>Comments</h4> 
+<div>
+- if there is a promotion, there is more sales with volume
+</div>
+<br>
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = units)) +
+    geom_point() +
+    geom_hline(yintercept = median(mtp$units), color="blue") +
+    annotate(geom = "text", label = "units mean", x=3, y = 6, color="blue") +
+    geom_smooth(mapping = aes(color = ad), method = "lm", se = FALSE)
+```
+<h4>Comments</h4> 
+<div>
+- both Ad A and B does not have points for heavier cereal product. We may need more information/data around there if possible
+</div>
+<br>
+
+```{r message = FALSE, warning = FALSE}
+mtp %>% 
+    ggplot(mapping = aes(x = volume, y = units)) +
+    geom_point() +
+    geom_hline(yintercept = median(mtp$units), color="blue") +
+    annotate(geom = "text", label = "units mean", x=3, y = 6, color="blue") +
+    geom_smooth(mapping = aes(color = company), method = "lm", se = FALSE)
+```
+<h4>Comments</h4> 
+<div>
+- Company name does not have any relation with the units
+</div>
+<br>
+
+
+
+<h2>Stats EDA</h2>
+```{r}
+#promo
+(t <- t.test(mtp$units[mtp$promo == '1'], mtp$units[mtp$promo == '0'], conf.level = 0.95))
+#ad
+(t <- t.test(mtp$units[mtp$ad == 'B'], mtp$units[mtp$ad == 'NONE'], conf.level = 0.95))
+```
+<h4>Comments</h4> 
+<div>
+- reject the null hypothesis that the promotion does not impact the units/sales
+</div>
+<br>
+```{r}
+z <- qnorm(0.975) #95 percent
+
+mtp %>%
+  group_by(promo) %>%
+  summarise(mn = mean(units), sd = sd(units), n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(aes(x = promo, y = mn)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = mn - ci, ymax = mn + ci), width = 0.5, position = position_dodge(0.9)) +
+  labs(title = "Units/sales difference by Promotion with error bar")
+
+mtp %>%
+  group_by(ad) %>%
+  summarise(mn = mean(units), sd = sd(units), n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(aes(x = ad, y = mn)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_errorbar(aes(ymin = mn - ci, ymax = mn + ci), width = 0.5, position = position_dodge(0.9)) +
+  labs(title = "Units/sales difference by advertisement type with error bar")
+
+```
+
+Do brand/company units/sales vary based on promotion?
+```{r}
+chisq.test(table(mtp$brand, mtp$promo))
+```
+<h2>Comments</h2>
+<div>
+- X-square is large,so reject the null
+- P-value is small, so reject the null
+- According to the test,we cannot see what is different and what is similar
+</div>
+<br>
+
+How do company units/sales vary with promotion
+```{r}
+C_P_n <- mtp %>%
+  group_by(company, promo) %>%
+  summarise(n = n())
+
+C_P_n_ci <- multinomialCI(t(C_P_n[, 3]), 0.05)
+
+C_P_tab <- mtp %>%
+  group_by(company, promo) %>%
+  summarise(prop = round(n()/sum(nrow(mtp)), 3))
+
+C_P_tab$ci_l <- round(C_P_n_ci[,1], 3)
+C_P_tab$ci_u <- round(C_P_n_ci[,2], 3)
+
+htmlTable(C_P_tab)
+```
+```{r}
+# Graph of proportions with confidence intervals
+C_P_tab %>% 
+  ggplot(aes(x = promo, y = prop, fill = company)) +
+  geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label = round(prop, 2)), vjust = -4, color = "black", # vjust moves lables above CI
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = ci_l, ymax = ci_u), 
+                width = 0.4, position = position_dodge(0.9)) +
+  ggsave(filename = "support.png")
+  
+```
+
+
+
+
+How do company units/sales vary with advertisement
+```{r}
+C_A_n <- mtp %>%
+  group_by(company, ad) %>%
+  summarise(n = n())
+C_A_n_ci <- multinomialCI(t(C_A_n[, 3]), 0.05)
+
+C_A_tab <- mtp %>%
+  group_by(company, ad) %>%
+  summarise(prop = round(n()/sum(nrow(mtp)), 3))
+
+C_A_tab$ci_l <- round(C_A_n_ci[,1], 3)
+C_A_tab$ci_u <- round(C_A_n_ci[,2], 3)
+
+htmlTable(C_A_tab)
+```
+```{r}
+# Graph of proportions with confidence intervals
+C_A_tab %>% 
+  ggplot(aes(x = ad, y = prop, fill = company)) +
+  geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label = round(prop, 2)), vjust = -4, color = "black", # vjust moves lables above CI
+            position = position_dodge(0.9), size = 4) +
+  geom_errorbar(aes(ymin = ci_l, ymax = ci_u), 
+                width = 0.4, position = position_dodge(0.9))
+```
+<h4>Comments</h4>
+<div>
+- Kelloggs has the most reliability in units/sales in any situation regardless if it has promotion or advertisement
+</div>
+<br>
+
+Significance of Correlation
+```{r}
+mtp %>% 
+  select_if(is.numeric) %>% 
+  as.matrix() %>% 
+  rcorr()
+```
+
+Multi-linear regression
+```{r}
+# Set up mtp data set for regression
+mtp_lm <- mtp %>% 
+  mutate_if(is.integer, as.factor)
+
+# Logit regression with general linear model (glm)
+mod <- glm(units ~ company + price + volume + flavor + package + promo + ad, 
+           family = binomial(link='logit'), 
+           data = mtp_lm)
+
+# Review output
+summary(mod)
+```
+<h4>Comments</h4>
+<div>
+- volume, flavorTOASTED, promo1 and adB are significant impact on units sold
+</div>
+<br>
+
+```{r}
+par(mfrow = c(1, 1))
+# units
+plot(mtp$units, mod$residuals)
+```
+
+```{r}
+# company
+plot(mtp$ad, mod$residuals)
+```
+
+```{r}
+plot(mtp$volume, mod$residuals)
+```
+```{r}
+# Flavor
+plot(mtp$flavor, mod$residuals)
+```
+```{r}
+# ad
+plot(mtp$ad, mod$residuals)
+```
+```{r}
+# promo
+plot(mtp$promo, mod$residuals)
+```
+<div>
+- units 
+- Ad A and B are correlative but A has one outlier residuals
+- units have residuals when unit is smaller
+- some observed variable is far away from the regression. Threfore, we may need more variables and sample to run more accurate
+</div>
+<br>
+
+Visualization of Multiple Regression
+```{r}
+coe <- summary(mod)$coefficients # get coefficients and related stats
+coe_CI <- as.data.frame(cbind(coe[-1, ], confint(mod)[-1, ])) # find and bind CI, remove Intercept 
+
+# Rename results data frame
+names(coe_CI) <- c("estimate", "se", "t", "pval","low_CI","high_CI") 
+
+
+# Order base on p-value
+htmlTable(round(coe_CI[order(coe_CI$pval, decreasing = FALSE), ], 3))
+```
+
+
+
+```{r}
+# reorder by p-value
+(g1 <- ggplot(coe_CI, aes(x = estimate, y = reorder(row.names(coe_CI),desc(pval)))) +
+  geom_point(size = 3) +
+  xlim(min(coe_CI$low_CI), max(coe_CI$high_CI)) +
+  ylab("Variable") +
+  xlab("Coefficient") +
+  theme_bw() 
+)
+```
+<div>
+- Volume has mroe the most significant impact on units/sales because its p-value is bigger than the alpha
+- Variables with p-value less than alpha could be influencial on units/sales?
+</div>
+```{r}
+# Use geom_segment to illustrate CI
+(g2 <- g1 +
+  geom_vline(xintercept = 0, color = "red")) +
+  geom_segment(aes(yend = reorder(row.names(coe_CI),desc(pval))), 
+               xend = coe_CI$high_CI, color = "Blue") +
+  geom_segment(aes(yend = reorder(row.names(coe_CI),desc(coe_CI$pval))), 
+               xend = coe_CI$low_CI, color = "Blue") +
+  xlab("Coefficient with Confidence Interval") 
+```
+<div>
+- 4 variables have positive p-value, which indicates positive outcome on units/sale.
+  - volume
+  - promo of 1
+  - flavor toasted
+  - ad of B
+- variables with negative coefficient have negative impact on units/sales.
+  - price
+  - ad none
+</div>
+
+
+<h2>Summary</h2>
+<div>
+- Strategy:
+  - Kelloggs has more advertisement, promotion (proportionally and quantatively), unit sales. 
+  - Post has less unit sales but they are concentrated on a few products/brand
+- What to recommend to GM
+  - Promotion and advertisement are effective on unit sales 
+</div>
+
+<h2>Create professional quality graph</h2>
+Graph for promo finding:
+```{r message = FALSE, warning = FALSE}
+z <- qnorm(0.975) #95 percent
+levels(mtp$ad)[1] <- "Mediam Advertisement"
+levels(mtp$ad)[2] <- "Small Advertisement"
+levels(mtp$ad)[3] <- "No Advertisement"
+
+levels(mtp$promo)[1] <- "Without Promotion"
+levels(mtp$promo)[2] <- "With Promotion"
+
+mtp %>%
+  group_by(promo) %>%
+  summarise(mn = mean(units), sd = sd(units), n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(aes(x = reorder(promo, mn) , y = mn)) +
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge" ,fill = "light blue") +
+  #geom_errorbar(aes(ymin = mn - ci, ymax = mn + ci), width = 0.5, position = position_dodge(0.9)) +
+  labs(title = "Promotion has contributed more sales", subtitle = "Cereals with promotion have approximately 42% more sales",x = "", y ="Average weekly units sold", caption = "From Technical Appendix: Statistic EDA") +
+  scale_y_continuous(breaks = seq(0, 16, 1)) +
+  coord_flip() +
+  ggsave(filename = "promo.png")
+
+mtp %>%
+  group_by(ad) %>%
+  summarise(mn = mean(units), sd = sd(units), n = n(), ci = z * sd/sqrt(n)) %>%
+  ggplot(aes(x = reorder(ad, mn) , y = mn)) +
+  theme_classic() +
+  geom_bar(stat = "identity", position = "dodge", fill = "light blue") +
+  #geom_errorbar(aes(ymin = mn - ci, ymax = mn + ci), width = 0.5, position = position_dodge(0.9)) +
+  labs(title = "Advertisement has an impact on our sales", subtitle = "Small advertisement have more impact on our sales than mediam advertisement", x = "", y = "Average weekly units sold", caption = "From Technical Appendix: Statistic EDA") +
+  scale_y_continuous(breaks = seq(0, 16, 1)) +
+  coord_flip() +
+  ggsave(filename = "ad.png")
+```
+
+
+
+
+```{r}
+(g1 <- ggplot(coe_CI, aes(x = estimate, y = reorder(row.names(coe_CI),desc(pval)))) +
+  geom_point(size = 3) +
+  xlim(min(coe_CI$low_CI), max(coe_CI$high_CI)) +
+  ylab("Variable") +
+  xlab("Coefficient") +
+  theme_bw() +
+  geom_vline(xintercept = 0, color = "red") +
+  labs(title = "What customers makes customer buy more and buy less", subtitle = "Volume, Promotion, Flavor and Small ad have positive influence on sales", caption = "From Technical Appendix: Statistic EDA", x ="Unit Sale Influence level", y ="") +
+  annotate(geom = "text", label = "Improves Unit sales", x=1, y = 1, color="dark blue") +
+  annotate(geom = "text", label = "Decrease Unit sales", x=-0.7, y = 1, color="dark red") +
+  theme_classic() +
+  ggsave(filename = "coefficient.png")
+
+)
+```
+
